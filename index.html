@@ -1,0 +1,134 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="theme-color" content="#0b1220" />
+  <title>Bluesky Add to Moderation List Helper</title>
+  <link rel="icon" type="image/png" href="assets/favicon.png" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <main class="container">
+    <h1>Bluesky Add to Moderation List Helper</h1>
+
+    <section class="panel">
+      <h2>1. Login</h2>
+      <p id="sessionStatus">Checking session...</p>
+      <div class="row">
+        <label for="handleInput">Handle</label>
+        <input id="handleInput" type="text" placeholder="@your-handle.bsky.social (or without @)" />
+      </div>
+      <div class="row actions">
+        <button id="loginBtn">Sign in with Bluesky</button>
+        <button id="logoutBtn" class="secondary">Sign out</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>2. Target list</h2>
+      <label for="listUriInput">List URI or Bluesky List URL</label>
+      <input id="listUriInput" type="text" placeholder="https://bsky.app/profile/<you>/lists/<rkey> or at://did:plc:.../app.bsky.graph.list/..." />
+      <p class="hint">Use a list owned by the currently signed-in account. Profile URLs are not list URLs.</p>
+      <div id="listPreview" class="list-preview">
+        <img id="listPreviewAvatar" alt="" />
+        <div class="list-preview-text">
+          <div id="listPreviewName">No list loaded</div>
+          <div id="listPreviewMeta" class="hint">Paste a list URL/URI to preview it.</div>
+        </div>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>3. Gather accounts from a post <span class="optional-label">Optional</span></h2>
+      <label for="postUrlInput">Bluesky post URL</label>
+      <div class="inline-input-row">
+        <input id="postUrlInput" type="text" placeholder="https://bsky.app/profile/example.com/post/3abc..." />
+        <button id="loadConversationBtn">Gather direct replies and quotes</button>
+      </div>
+      <p class="hint">Review direct replies and quote posts one at a time, then add their author or everyone who liked that post to the batch below.</p>
+      <p id="conversationStatus" class="conversation-status" aria-live="polite">No post loaded.</p>
+
+      <div id="sourcePostContext" class="source-context" hidden>
+        <h3>Source post</h3>
+        <article class="post-card source-card">
+          <div class="post-heading">
+            <img id="sourceAuthorAvatar" class="post-avatar" alt="" />
+            <div>
+              <div id="sourceAuthorName" class="post-author-name"></div>
+              <div id="sourceAuthorHandle" class="hint"></div>
+            </div>
+          </div>
+          <p id="sourcePostText" class="post-text"></p>
+          <div id="sourcePostMedia" class="post-media"></div>
+          <a id="sourcePostLink" class="post-link" target="_blank" rel="noopener noreferrer">Open source post on Bluesky</a>
+          <div class="row actions post-actions">
+            <button id="addSourceAuthorBtn">Add post author to batch</button>
+            <button id="addSourceLikersBtn">Add everyone who liked this post</button>
+          </div>
+          <p id="sourceActionStatus" class="hint action-status" aria-live="polite"></p>
+        </article>
+      </div>
+
+      <div id="postReview" class="post-review" hidden>
+        <div class="review-toolbar">
+          <button id="previousPostBtn" class="secondary compact" aria-label="Previous post">Previous</button>
+          <span id="postProgress"></span>
+          <button id="nextPostBtn" class="secondary compact" aria-label="Next post">Next</button>
+        </div>
+        <article class="post-card">
+          <div class="post-heading">
+            <img id="postAuthorAvatar" class="post-avatar" alt="" />
+            <div>
+              <div id="postAuthorName" class="post-author-name"></div>
+              <div id="postAuthorHandle" class="hint"></div>
+            </div>
+            <span id="postKind" class="post-kind"></span>
+          </div>
+          <p id="postText" class="post-text"></p>
+          <div id="postMedia" class="post-media"></div>
+          <a id="postLink" class="post-link" target="_blank" rel="noopener noreferrer">Open post on Bluesky</a>
+          <div class="row actions post-actions">
+            <button id="addPostAuthorBtn">Add post author to batch</button>
+            <button id="addPostLikersBtn">Add everyone who liked this post</button>
+          </div>
+          <p id="postActionStatus" class="hint action-status" aria-live="polite"></p>
+        </article>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>4. Batch input</h2>
+      <label for="entriesInput">One profile URL, handle (with or without @), or DID per line</label>
+      <textarea id="entriesInput" rows="14" placeholder="https://bsky.app/profile/example.com"></textarea>
+      <label class="checkbox-row">
+        <input id="skipDuplicatesInput" type="checkbox" checked />
+        Skip accounts already on list
+      </label>
+      <div class="row actions">
+        <button id="submitBtn">Add accounts to list</button>
+      </div>
+    </section>
+
+    <section class="panel">
+      <h2>5. Results</h2>
+      <pre id="summaryBox">No run yet.</pre>
+      <div id="warningsBox"></div>
+      <table id="resultsTable">
+        <thead>
+          <tr>
+            <th>Input</th>
+            <th>Normalized</th>
+            <th>DID</th>
+            <th>Status</th>
+            <th>Message</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>

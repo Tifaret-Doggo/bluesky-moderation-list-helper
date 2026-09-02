@@ -1,0 +1,21 @@
+{
+  "name": "bsky-modlist-tool",
+  "version": "1.0.0",
+  "private": true,
+  "license": "0BSD",
+  "description": "Local Bluesky moderation list batch entry tool",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "check": "node --check server.js && node --check app.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@atproto/api": "^0.16.9",
+    "@atproto/oauth-client-node": "^0.3.7",
+    "cookie-parser": "^1.4.7",
+    "express": "^4.21.2"
+  }
+}
