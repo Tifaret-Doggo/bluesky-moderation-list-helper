@@ -6,6 +6,11 @@ const listUriInput = document.getElementById('listUriInput');
 const entriesInput = document.getElementById('entriesInput');
 const skipDuplicatesInput = document.getElementById('skipDuplicatesInput');
 const submitBtn = document.getElementById('submitBtn');
+const clearEntriesBtn = document.getElementById('clearEntriesBtn');
+const relationshipReview = document.getElementById('relationshipReview');
+const relationshipTableBody = document.querySelector('#relationshipTable tbody');
+const submitRelatedBtn = document.getElementById('submitRelatedBtn');
+const relationshipReviewStatus = document.getElementById('relationshipReviewStatus');
 const summaryBox = document.getElementById('summaryBox');
 const warningsBox = document.getElementById('warningsBox');
 const resultsTableBody = document.querySelector('#resultsTable tbody');
@@ -49,11 +54,14 @@ let currentPostIndex = 0;
 let conversationLoading = false;
 const authorActionsCompleted = new Set();
 const likerActionsCompleted = new Set();
+const relationshipReviewEntries = new Map();
 
 function setBusy(flag) {
   loginBtn.disabled = flag;
   logoutBtn.disabled = flag;
   submitBtn.disabled = flag;
+  clearEntriesBtn.disabled = flag;
+  submitRelatedBtn.disabled = flag || relationshipReviewEntries.size === 0;
   loadConversationBtn.disabled = flag || conversationLoading;
 }
 
@@ -366,6 +374,69 @@ async function loadConversation() {
   }
 }
 
+function renderRelationshipReview() {
+  relationshipTableBody.replaceChildren();
+  relationshipReview.hidden = relationshipReviewEntries.size === 0;
+  submitRelatedBtn.disabled = relationshipReviewEntries.size === 0;
+
+  for (const entry of relationshipReviewEntries.values()) {
+    const tr = document.createElement('tr');
+
+    const accountCell = document.createElement('td');
+    const account = document.createElement('div');
+    account.className = 'relationship-account';
+    const normalized = String(entry.normalized || entry.input || entry.did || 'Unknown account');
+    account.textContent = normalized.startsWith('did:') ? normalized : `@${normalized.replace(/^@/, '')}`;
+    accountCell.appendChild(account);
+    if (entry.did && entry.did !== normalized) {
+      const did = document.createElement('div');
+      did.className = 'relationship-did';
+      did.textContent = entry.did;
+      accountCell.appendChild(did);
+    }
+
+    const relationshipCell = document.createElement('td');
+    relationshipCell.textContent = entry.relationship || '';
+
+    const actionCell = document.createElement('td');
+    const removeButton = document.createElement('button');
+    removeButton.className = 'secondary compact';
+    removeButton.textContent = 'Remove';
+    removeButton.addEventListener('click', () => {
+      relationshipReviewEntries.delete(entry.did);
+      relationshipReviewStatus.textContent = 'Account removed from the pending review list.';
+      renderRelationshipReview();
+    });
+    actionCell.appendChild(removeButton);
+
+    tr.append(accountCell, relationshipCell, actionCell);
+    relationshipTableBody.appendChild(tr);
+  }
+
+  if (relationshipReviewEntries.size) {
+    submitRelatedBtn.textContent = `Add ${relationshipReviewEntries.size} reviewed ${relationshipReviewEntries.size === 1 ? 'account' : 'accounts'} to list anyway`;
+  }
+}
+
+function mergeRelationshipReview(entries) {
+  for (const entry of Array.isArray(entries) ? entries : []) {
+    if (entry?.did) relationshipReviewEntries.set(entry.did, entry);
+  }
+  if (entries?.length) {
+    relationshipReviewStatus.textContent = `${entries.length} related ${entries.length === 1 ? 'account was' : 'accounts were'} held for review.`;
+  }
+  renderRelationshipReview();
+}
+
+function removeCompletedRelationshipEntries(results) {
+  for (const result of Array.isArray(results) ? results : []) {
+    if (result?.did && (result.status === 'added' || result.status === 'already_present')) {
+      relationshipReviewEntries.delete(result.did);
+    }
+  }
+  renderRelationshipReview();
+}
+
 function renderResults(payload) {
   if (!payload) {
     summaryBox.textContent = 'No run yet.';
@@ -380,6 +451,7 @@ function renderResults(payload) {
     `Normalized: ${s.normalized}`,
     `Added: ${s.added}`,
     `Already present: ${s.alreadyPresent}`,
+    `Held for relationship review: ${s.heldForReview || 0}`,
     `Invalid: ${s.invalid}`,
     `Failed: ${s.failed}`,
   ].join('\n');
@@ -546,17 +618,16 @@ logoutBtn.addEventListener('click', async () => {
   }
 });
 
-submitBtn.addEventListener('click', async () => {
+async function submitAccounts(entries, bypassRelationshipCheck = false) {
   setBusy(true);
   try {
     const listUri = listUriInput.value.trim();
-    const entries = entriesInput.value.split(/\r?\n/);
     const skipDuplicates = skipDuplicatesInput.checked;
 
     const res = await fetch('/api/add-to-list', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': csrfToken },
-      body: JSON.stringify({ listUri, entries, skipDuplicates }),
+      body: JSON.stringify({ listUri, entries, skipDuplicates, bypassRelationshipCheck }),
     });
 
     const payload = await res.json();
@@ -565,12 +636,31 @@ submitBtn.addEventListener('click', async () => {
     }
 
     renderResults(payload);
+    if (bypassRelationshipCheck) {
+      removeCompletedRelationshipEntries(payload.results);
+    } else {
+      mergeRelationshipReview(payload.relationshipReview);
+    }
     await readSession();
   } catch (error) {
     alert(error.message);
   } finally {
     setBusy(false);
   }
+}
+
+submitBtn.addEventListener('click', () => {
+  submitAccounts(entriesInput.value.split(/\r?\n/));
+});
+
+submitRelatedBtn.addEventListener('click', () => {
+  const entries = [...relationshipReviewEntries.values()].map((entry) => entry.normalized || entry.input || entry.did);
+  if (entries.length) submitAccounts(entries, true);
+});
+
+clearEntriesBtn.addEventListener('click', () => {
+  entriesInput.value = '';
+  entriesInput.focus();
 });
 
 loadConversationBtn.addEventListener('click', loadConversation);

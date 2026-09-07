@@ -312,6 +312,7 @@ function summarizeResults(results, submittedCount, normalizedCount) {
     normalized: normalizedCount,
     added: 0,
     alreadyPresent: 0,
+    heldForReview: 0,
     invalid: 0,
     failed: 0,
   };
@@ -319,6 +320,7 @@ function summarizeResults(results, submittedCount, normalizedCount) {
   for (const row of results) {
     if (row.status === 'added') summary.added += 1;
     else if (row.status === 'already_present') summary.alreadyPresent += 1;
+    else if (row.status === 'relationship_review') summary.heldForReview += 1;
     else if (row.status === 'invalid_input') summary.invalid += 1;
     else summary.failed += 1;
   }
@@ -388,7 +390,11 @@ async function normalizePostUriFromInputPublic(value) {
 async function fetchPublicXrpc(method, params) {
   const url = new URL(`/xrpc/${method}`, PUBLIC_API_ORIGIN);
   for (const [key, value] of Object.entries(params)) {
-    if (value !== undefined && value !== null && value !== '') url.searchParams.set(key, String(value));
+    if (Array.isArray(value)) {
+      for (const item of value) url.searchParams.append(key, String(item));
+    } else if (value !== undefined && value !== null && value !== '') {
+      url.searchParams.set(key, String(value));
+    }
   }
   const response = await fetch(url);
   if (!response.ok) {
@@ -402,6 +408,35 @@ async function fetchPublicXrpc(method, params) {
     throw new Error(message || `Bluesky request failed (${response.status}).`);
   }
   return response.json();
+}
+
+async function fetchRelationships(actorDid, otherDids) {
+  const relationships = new Map();
+  const uniqueDids = [...new Set(otherDids.map((did) => String(did || '').toLowerCase()).filter(Boolean))];
+
+  for (let index = 0; index < uniqueDids.length; index += 30) {
+    const data = await fetchPublicXrpc('app.bsky.graph.getRelationships', {
+      actor: actorDid,
+      others: uniqueDids.slice(index, index + 30),
+    });
+    for (const relationship of Array.isArray(data?.relationships) ? data.relationships : []) {
+      const did = String(relationship?.did || '').toLowerCase();
+      if (!did) continue;
+      relationships.set(did, {
+        following: Boolean(relationship?.following),
+        followedBy: Boolean(relationship?.followedBy),
+      });
+    }
+  }
+
+  return relationships;
+}
+
+function relationshipLabel(relationship) {
+  if (relationship?.following && relationship?.followedBy) return 'Mutual follows';
+  if (relationship?.following) return 'Followed by you';
+  if (relationship?.followedBy) return 'Follows you';
+  return null;
 }
 
 async function fetchFeedXrpc(agent, method, params) {
@@ -764,6 +799,7 @@ app.post('/api/add-to-list', async (req, res) => {
   const listUriInput = req.body?.listUri;
   const entriesInput = Array.isArray(req.body?.entries) ? req.body.entries : [];
   const skipDuplicates = req.body?.skipDuplicates !== false;
+  const bypassRelationshipCheck = req.body?.bypassRelationshipCheck === true;
 
   if (entriesInput.length > MAX_BATCH) {
     return res.status(400).json({ error: `Batch size exceeds hard cap (${MAX_BATCH}).` });
@@ -812,6 +848,8 @@ app.post('/api/add-to-list', async (req, res) => {
     return res.status(400).json({ error: `Unable to fetch list members: ${String(error?.message || 'unknown error')}` });
   }
 
+  const resolvedEntries = [];
+  const resolvedDids = new Set();
   for (const entry of parsed) {
     let did = null;
     try {
@@ -828,6 +866,63 @@ app.post('/api/add-to-list', async (req, res) => {
         continue;
       }
 
+      if (resolvedDids.has(did)) {
+        results.push({
+          input: entry.input,
+          normalized: entry.normalized,
+          did,
+          status: 'already_present',
+          message: 'Duplicate account in submitted batch',
+        });
+        continue;
+      }
+
+      resolvedDids.add(did);
+      resolvedEntries.push({ entry, did });
+    } catch (error) {
+      results.push({
+        input: entry.input,
+        normalized: entry.normalized,
+        did: entry.kind === 'did' ? entry.normalized : null,
+        status: entry.kind === 'handle' ? 'resolve_failed' : 'write_failed',
+        message: String(error?.message || 'Unable to resolve account'),
+      });
+    }
+  }
+
+  let relationships = new Map();
+  if (!bypassRelationshipCheck && resolvedEntries.length) {
+    try {
+      relationships = await fetchRelationships(session.did, resolvedEntries.map(({ did }) => did));
+    } catch (error) {
+      return res.status(400).json({
+        error: `Unable to check follow relationships: ${String(error?.message || 'unknown error')}`,
+      });
+    }
+  }
+
+  const relationshipReview = [];
+  for (const { entry, did } of resolvedEntries) {
+    const relationship = relationships.get(did);
+    const relationshipStatus = relationshipLabel(relationship);
+    if (relationshipStatus) {
+      relationshipReview.push({
+        input: entry.input,
+        normalized: entry.normalized,
+        did,
+        relationship: relationshipStatus,
+      });
+      results.push({
+        input: entry.input,
+        normalized: entry.normalized,
+        did,
+        status: 'relationship_review',
+        message: relationshipStatus,
+      });
+      continue;
+    }
+
+    try {
       await agent.com.atproto.repo.createRecord({
         repo: session.did,
         collection: 'app.bsky.graph.listitem',
@@ -848,15 +943,14 @@ app.post('/api/add-to-list', async (req, res) => {
       });
     } catch (error) {
       const rawMessage = String(error?.message || 'Unknown error');
-      const status = did ? 'write_failed' : entry.kind === 'handle' ? 'resolve_failed' : 'write_failed';
       const message = /Missing required scope/i.test(rawMessage)
         ? 'Missing OAuth scope for this operation. Sign out and sign in again, then retry.'
         : rawMessage;
       results.push({
         input: entry.input,
         normalized: entry.normalized,
-        did: did || (entry.kind === 'did' ? entry.normalized : null),
-        status,
+        did,
+        status: 'write_failed',
         message,
       });
     }
@@ -866,6 +960,7 @@ app.post('/api/add-to-list', async (req, res) => {
     summary: summarizeResults(results, entriesInput.length, parsed.length),
     warnings,
     results,
+    relationshipReview,
   };
 
   return res.json(response);

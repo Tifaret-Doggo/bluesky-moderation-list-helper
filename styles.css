@@ -96,6 +96,10 @@ button.secondary {
   background: #44556f;
 }
 
+button.danger {
+  background: #b4232c;
+}
+
 button.compact {
   padding: 6px 10px;
 }
@@ -281,6 +285,52 @@ button:disabled {
   margin: 8px 0 0;
 }
 
+.relationship-review {
+  margin-top: 16px;
+  padding: 12px;
+  border: 1px solid #a83c45;
+  border-radius: 10px;
+  background: rgba(90, 18, 24, 0.25);
+}
+
+.relationship-review h3 {
+  margin: 0 0 6px;
+}
+
+.table-scroll {
+  overflow-x: auto;
+}
+
+#relationshipTable {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+#relationshipTable th,
+#relationshipTable td {
+  border: 1px solid var(--line);
+  padding: 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+#relationshipTable th:last-child,
+#relationshipTable td:last-child {
+  width: 1%;
+  white-space: nowrap;
+}
+
+.relationship-account {
+  font-weight: 600;
+}
+
+.relationship-did {
+  margin-top: 2px;
+  color: var(--muted);
+  font-size: 12px;
+  word-break: break-all;
+}
+
 .list-preview {
   margin-top: 8px;
   display: flex;
@@ -343,6 +393,7 @@ button:disabled {
 
 .status-added { color: #146c2e; }
 .status-already_present { color: #5f6b82; }
+.status-relationship_review { color: #ffbe7a; }
 .status-invalid_input,
 .status-resolve_failed,
 .status-write_failed { color: var(--danger); }

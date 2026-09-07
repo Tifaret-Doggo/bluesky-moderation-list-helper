@@ -19,6 +19,7 @@
 - Normalizes/validates input
 - Resolves handles to DIDs
 - Fetches current list membership with pagination
+- Holds followed accounts, followers, and mutual follows for explicit review before adding
 - Skips existing members (default on)
 - Creates missing `app.bsky.graph.listitem` records
 - Returns per-line status and summary

@@ -107,6 +107,28 @@
       </label>
       <div class="row actions">
         <button id="submitBtn">Add accounts to list</button>
+        <button id="clearEntriesBtn" class="secondary">Clear batch</button>
+      </div>
+
+      <div id="relationshipReview" class="relationship-review" hidden>
+        <h3>Accounts with follow relationships</h3>
+        <p class="hint">These accounts were held back because they follow you, are followed by you, or both. Remove anyone who should not be added.</p>
+        <div class="table-scroll">
+          <table id="relationshipTable">
+            <thead>
+              <tr>
+                <th>Account</th>
+                <th>Relationship</th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+        <div class="row actions">
+          <button id="submitRelatedBtn" class="danger">Add reviewed accounts to list anyway</button>
+        </div>
+        <p id="relationshipReviewStatus" class="hint action-status" aria-live="polite"></p>
       </div>
     </section>
 
